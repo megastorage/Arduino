@@ -70,7 +70,7 @@ void loop() {
   /* Module 1-Wire découvert ! */
   oled.clear();
   oled.setCursor(0, 0);
-  oled.println(F("Found:"));
+  oled.println(F("One Wire Found:"));
   for(byte i = 0; i < 8; ++i) {
     if (address_One[i] < 0x10) oled.write('0');
     oled.print(address_One[i], HEX);
