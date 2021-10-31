@@ -1,45 +1,53 @@
-/*********
-  Rui Santos
-  Complete project details at https://randomnerdtutorials.com  
-*********/
+#include <Adafruit_I2CDevice.h>
 
-#include <Wire.h>
- 
+#include <Tiny4kOLED.h>
+#include "TinyWireM.h" 
+#include "Minimum_font.h"
+const DCfont *currentFont = FONTMINIMUM; 
+Adafruit_I2CDevice i2c_dev = Adafruit_I2CDevice(0x10);
+
 void setup() {
-  Wire.begin();
-  Serial.begin(115200);
-  Serial.println("\nI2C Scanner");
+   oled.begin();
+  //while (!Serial) { delay(10); }
+  //Serial.begin(115200);
+  //Serial.println("I2C address detection test");
+oled.setFont(currentFont);
+oled.clear();
+oled.on();
 }
- 
+
 void loop() {
+  
   byte error, address;
   int nDevices;
-  Serial.println("Scanning...");
+  oled.setCursor(0, 0);
+  oled.println("Scanning...");
   nDevices = 0;
   for(address = 1; address < 127; address++ ) {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
+    TinyWireM.beginTransmission(address);
+    error = TinyWireM.endTransmission();
     if (error == 0) {
-      Serial.print("I2C device found at address 0x");
+      oled.print("I2C found at 0x");
       if (address<16) {
-        Serial.print("0");
+        oled.print("0");
       }
-      Serial.println(address,HEX);
+      oled.println(address,HEX);
       nDevices++;
     }
     else if (error==4) {
-      Serial.print("Unknow error at address 0x");
+      oled.print("Unknow error at address 0x");
       if (address<16) {
-        Serial.print("0");
+        oled.print("0");
       }
-      Serial.println(address,HEX);
+      oled.println(address,HEX);
     }    
   }
   if (nDevices == 0) {
-    Serial.println("No I2C devices found\n");
+    oled.println("No I2C devices found\n");
   }
   else {
-    Serial.println("done\n");
+    oled.println("done\n");
   }
-  delay(5000);          
+  delay(2000);  
+  oled.clear();   
 }
