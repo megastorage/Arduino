@@ -405,7 +405,6 @@ void oregon_send( byte ID, float TempSend){
 }
 
 float ph(float Conv_Input,float PH_Base, float PH_ACID, float Conv_Basic, float Conv_Acid) {
-   //return 7 + ((1.65 - voltage) / 0.18);
    float coef_a, coef_b, Result_PH;
 
     /* Calcul coef A*/
@@ -417,15 +416,23 @@ float ph(float Conv_Input,float PH_Base, float PH_ACID, float Conv_Basic, float 
     /* Calcul Final*/
     Result_PH = ((Conv_Input * coef_a) + coef_b);
     Serial.println("");
+    Serial.println("---------------------------");
     Serial.println("Calcul PH values");
     Serial.println(coef_a);
     Serial.println(coef_b);
     Serial.println(Conv_Input);
     Serial.println(Result_PH);
     Serial.println(Conv_Input * coef_a);
-
+    Serial.println("---------------------------");
+    Serial.println("");
     Result_PH = Result_PH/100;
-    
+
+    if (Result_PH > 14.0 ){
+      Result_PH =10.0;
+    }
+    else if (Result_PH < 0.0){
+       Result_PH =0.0;
+    }
    return Result_PH;
    //return 21.6538 - (voltage * 5.7692);
  
