@@ -736,9 +736,5 @@ if (!((LastPH == PHSend) and (LastTemp == TempSend))){
     display.clearDisplay();
     display.display();
   }
-#ifdef WIFI_ON
-    //Utilisation des objets
-       
-#endif  
 
 }
