@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+  <head> 
+      <meta charset="utf-8">
+          <title>Page de calibration</title>
+  </head>
+  <body>
+    <table>
+        <TR>
+            <th colspan="2"><h1>Fonction Appelée</h1></th>
+       </TR>
+       <tbody>
+        <tr>
+            <td><button onclick="appelServeur('/Base_PH_4', traiteReponse)">Validation PH 4 </button></td>
+            <td><button onclick="appelServeur('/Base_PH_10', traiteReponse)">Validation PH 10 </button></td>
+       </tr>
+       <tr>
+          <td>Valeur PH: <h2 id="FunctionPH"></h2></td>
+          <td>Valeur point conv: <h2 id="FunctionCONV"></h2></td>
+       </tr>
+       
+       <tr><th colspan="2"><h2 id="FunctionCall"></h2></tr></th>
+       </tbody>
+    </table>
+    
+    <script>
+       
+        function appelServeur(url, cFonction) {
+            var xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    cFonction(this);
+                }
+            };
+            xhttp.open("GET", url, true);
+            xhttp.send();
+        }
+        function traiteReponse(xhttp) {
+            document.getElementById("FunctionCall").innerHTML = "Fonction Appelée: " + xhttp.responseText;
+        }
+
+        function appelUpdate_PH(url, cFonction) {
+            var xhttp_PH = new XMLHttpRequest();
+            xhttp_PH.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    cFonction(this);
+                }
+            };
+            xhttp_PH.open("GET", url, true);
+            xhttp_PH.send();
+        }
+        
+        function appelUpdate_Conv(url, cFonction) {
+            var xhttp_CONV = new XMLHttpRequest();
+            xhttp_CONV.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    cFonction(this);
+                }
+            };
+            xhttp_CONV.open("GET", url, true);
+            xhttp_CONV.send();
+        }
+        
+        
+        function updateValue(){
+          appelUpdate('/UpdatePH', updateValueReturnPH);
+          appelUpdate_Conv('/UpdateCONV', updateValueReturnCONV);
+         
+        }
+        
+        function updateValueReturnPH(xhttp_PH) {
+          document.getElementById("FunctionPH").innerHTML = xhttp_PH.responseText;           
+        }
+        
+        function updateValueReturnCONV(xhttp_CONV) {
+           document.getElementById("FunctionCONV").innerHTML = xhttp_CONV.responseText; 
+        }
+      var update_PH= setInterval("appelUpdate_PH('/UpdatePH', updateValueReturnPH)", 100);
+      var update_CONV= setInterval("appelUpdate_Conv('/UpdateCONV', updateValueReturnCONV)", 100);
+       
+    </script>
+  </body>
+
+</html>
