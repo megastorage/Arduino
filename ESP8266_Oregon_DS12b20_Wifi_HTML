@@ -83,7 +83,7 @@ float PHSend = 0.0;
 float LastTemp = 0.0;
 float LastPH =0.0;
 float adc_resolution = 1024.0;
-float voltage=0.0;
+float PH_Moyen_Input=0.0;
 const byte TX_PIN = 15;
 const unsigned long TIME = 512;
 const unsigned long TWOTIME = TIME*2;
@@ -404,10 +404,31 @@ void oregon_send( byte ID, float TempSend){
 
 }
 
-float ph (float voltage) {
+float ph(float Conv_Input,float PH_Base, float PH_ACID, float Conv_Basic, float Conv_Acid) {
    //return 7 + ((1.65 - voltage) / 0.18);
-   return 21.6538 - (voltage * 5.7692);
-   //return (voltage);
+   float coef_a, coef_b, Result_PH;
+
+    /* Calcul coef A*/
+    coef_a = ((PH_Base-PH_ACID)/(Conv_Basic-Conv_Acid));
+
+    /* Calcul B*/
+    coef_b= PH_Base - (Conv_Basic * coef_a);
+
+    /* Calcul Final*/
+    Result_PH = ((Conv_Input * coef_a) + coef_b);
+    Serial.println("");
+    Serial.println("Calcul PH values");
+    Serial.println(coef_a);
+    Serial.println(coef_b);
+    Serial.println(Conv_Input);
+    Serial.println(Result_PH);
+    Serial.println(Conv_Input * coef_a);
+
+    Result_PH = Result_PH/100;
+    
+   return Result_PH;
+   //return 21.6538 - (voltage * 5.7692);
+ 
 }
 
 /**
@@ -445,12 +466,6 @@ const char index_html[] PROGMEM = R"=====(
    
 )=====";*/
 
-void handleRoot() {
-  //String temp(reinterpret_cast<const __FlashStringHelper *> (index_html));
-  //temp.replace("%LED%",Call_By);
- // serverWeb.send(200, "text/html", index_html);
-}
-
 void Base_PH_4(){
   Call_By="Base PH 4 Start";
    serverWeb.send(200, "text/plain", Call_By);
@@ -460,7 +475,11 @@ void Base_PH_4(){
    Serial.println(PHSend_EEPROM);
 
    Clear_EEPROM(addr_PH_ACID);
-   EEPROM.put(addr_PH_ACID, PHSend_EEPROM);
+   EEPROM.put(addr_PH_ACID, 400);
+
+   Clear_EEPROM(addr_Conv_ACID);
+  // EEPROM.put(addr_Conv_ACID, adc0);
+  EEPROM.put(addr_Conv_ACID, 16295);
    
    
    Serial.println("");
@@ -485,8 +504,10 @@ void Base_PH_10(){
   
   Serial.print("Before to send on PH10: ");
    Serial.println(adc0);
-   Clear_EEPROM(addr_Conv_ACID);
-   EEPROM.put(addr_Conv_ACID, adc0);
+   Clear_EEPROM(addr_Conv_BASIC);
+   EEPROM.put(addr_Conv_BASIC, adc0);
+   Clear_EEPROM(addr_PH_BASIC);
+   EEPROM.put(addr_PH_BASIC, 1000);
  
 
    Serial.println("");
@@ -500,7 +521,7 @@ void Base_PH_10(){
   Serial.println("Send for print: ");
   Serial.println(adc0);
   Serial.print("Acid Conv: ");
-   read_EPPROM(addr_Conv_ACID,calc_CONV_ACID);
+   read_EPPROM(addr_Conv_BASIC,calc_CONV_BASIC);
 }
 
 void Clear_EEPROM(int addresse){
@@ -569,8 +590,6 @@ void setup()
       serverWeb.on("/Base_PH_10",Base_PH_10);
       serverWeb.on("/UpdatePH",UpdatePH);
       serverWeb.on("/UpdateCONV",UpdateCONV);
-     // serverWeb.on("/",handleRoot);
-     // serverWeb.on("/index.html",handleRoot);
       serverWeb.begin();
   #endif
 
@@ -661,16 +680,18 @@ serverWeb.handleClient();
       //adc2 = ads.readADC_SingleEnded(2);
       //adc3 = ads.readADC_SingleEnded(3);
       volt0 = ads.computeVolts(adc0);
-      measurings += volt0;
+     measurings += volt0;
+      //measurings += adc0;
+  
+      
         delay(10);
     }
 
-    voltage = measurings/samples;
+    PH_Moyen_Input = measurings/samples;
 
 
   /*Oregon*/
-
- PHSend= ph(voltage);
+ PHSend= ph(adc0, calc_PH_ACID,calc_PH_BASIC,calc_CONV_ACID,calc_CONV_BASIC );
         
   float temperature_Sonde[0];
    
@@ -687,8 +708,8 @@ serverWeb.handleClient();
   Serial.println("Start Oregon PH");
   Serial.print("Calcul PH: ");
   Serial.println(PHSend);
-  Serial.print("Voltage: ");
-  Serial.println(voltage);
+  Serial.print("PH moyenne Input: ");
+  Serial.println(PH_Moyen_Input);
   Serial.print("Voltage Direct: ");
   Serial.println(ads.computeVolts(adc0));
   /*Oregon*/
