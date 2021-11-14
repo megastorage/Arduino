@@ -471,30 +471,14 @@ void Base_PH_4(){
    serverWeb.send(200, "text/plain", Call_By);
    Serial.print("Before to send ON PH4: ");
    
-   int PHSend_EEPROM = int (PHSend * 100);
+   int PHSend_EEPROM = int (4 * 100);
    Serial.println(PHSend_EEPROM);
-
-   Clear_EEPROM(addr_PH_ACID);
-   EEPROM.put(addr_PH_ACID, 400);
-
-   Clear_EEPROM(addr_Conv_ACID);
-  // EEPROM.put(addr_Conv_ACID, adc0);
-  EEPROM.put(addr_Conv_ACID, 16295);
    
-   
-   Serial.println("");
-  if (EEPROM.commit()) {
-    Serial.println("Data successfully committed");
-  } else {
-    Serial.println("ERROR! Data commit failed");
-  }
+    Update_EEPROM(addr_PH_ACID, PHSend_EEPROM);
+    Update_EEPROM(addr_Conv_ACID, adc0);
 
   Serial.println("");
-  Serial.println("Check writing");
-  Serial.print("Send for print: ");
-  Serial.println(PHSend);
-  Serial.print("Acid PH: ");
-   read_EPPROM(addr_PH_ACID,calc_PH_ACID);
+   read_EEPROM(addr_PH_ACID,calc_PH_ACID);
    
 }
 
@@ -503,25 +487,57 @@ void Base_PH_10(){
   serverWeb.send(200, "text/plain", Call_By);
   
   Serial.print("Before to send on PH10: ");
-   Serial.println(adc0);
-   Clear_EEPROM(addr_Conv_BASIC);
-   EEPROM.put(addr_Conv_BASIC, adc0);
-   Clear_EEPROM(addr_PH_BASIC);
-   EEPROM.put(addr_PH_BASIC, 1000);
- 
+   int PHSend_EEPROM = int (10 * 100);
+   Serial.println(PHSend_EEPROM);
+   
+   Update_EEPROM(addr_PH_BASIC, PHSend_EEPROM);
+   Update_EEPROM(addr_Conv_BASIC, adc0);
+   
+  Serial.println("");
+  Serial.println("Send for print: ");
+  Serial.println(adc0);
+  Serial.print("Acid Conv: ");
+   read_EEPROM(addr_Conv_BASIC,calc_CONV_BASIC);
+}
 
-   Serial.println("");
+
+
+void UpdatePH(){
+  Call_By="";
+  Call_By.concat(TempSend);
+  serverWeb.send(200, "text/plain", Call_By); 
+}
+
+void UpdateCONV(){
+  Call_By="";
+  Call_By.concat(adc0);
+  serverWeb.send(200, "text/plain", Call_By);
+}
+
+
+/* Gestion EEPROM */
+
+void read_EEPROM(int addresse, int &variable){
+  Serial.println("Check writing");
+  EEPROM.get(addresse,variable);
+  Serial.println(variable);
+}
+
+void Update_EEPROM(int addresse, int variable){
+  Serial.println("Update EEPROM");
+  Serial.println(addresse);
+  Serial.println(variable);
+
+  Clear_EEPROM(addresse);
+  EEPROM.put(addresse, variable);
+
+  Serial.println("");
+  
   if (EEPROM.commit()) {
     Serial.println("Data successfully committed");
   } else {
     Serial.println("ERROR! Data commit failed");
   }
- 
-  Serial.println("");
-  Serial.println("Send for print: ");
-  Serial.println(adc0);
-  Serial.print("Acid Conv: ");
-   read_EPPROM(addr_Conv_BASIC,calc_CONV_BASIC);
 }
 
 void Clear_EEPROM(int addresse){
@@ -529,31 +545,9 @@ void Clear_EEPROM(int addresse){
   for (int i = addresse; i < (addresse + 5); i++) {
     EEPROM.write(i, 0);
   }
+  Serial.println("Clear Address");
+  Serial.println(addresse);
   Serial.println("Clear EEPROM DONE");
-}
-
-void UpdatePH(){
-  Call_By="";
-  Call_By.concat(TempSend);
-  serverWeb.send(200, "text/plain", Call_By);
- 
-}
-
-void UpdateCONV(){
-  Call_By="";
-  Call_By.concat(adc0);
-  serverWeb.send(200, "text/plain", Call_By);
-  
- 
-}
-
-void read_EPPROM(int addresse, int &variable){
-  Serial.println("Check writing");
-  
-  
-    EEPROM.get(addresse,variable);
- 
-  Serial.println(variable);
 }
 
 void setup()
@@ -569,12 +563,12 @@ void setup()
     Serial.println("SPIFFS Mount succesfull");
   }
   
-  /* Lecture EPPROM*/
+  /* Lecture EEPROM*/
   EEPROM.begin(20);
-  read_EPPROM(addr_PH_ACID, calc_PH_ACID);
-  read_EPPROM(addr_Conv_ACID,calc_CONV_ACID);
-  read_EPPROM(addr_PH_BASIC,calc_PH_BASIC);
-  read_EPPROM(addr_Conv_BASIC,calc_CONV_BASIC);
+  read_EEPROM(addr_PH_ACID, calc_PH_ACID);
+  read_EEPROM(addr_Conv_ACID,calc_CONV_ACID);
+  read_EEPROM(addr_PH_BASIC,calc_PH_BASIC);
+  read_EEPROM(addr_Conv_BASIC,calc_CONV_BASIC);
   
   #ifndef WIFI_ON
     DisableWifi();
@@ -744,9 +738,7 @@ if (!((LastPH == PHSend) and (LastTemp == TempSend))){
   }
 #ifdef WIFI_ON
     //Utilisation des objets
-    
-     
+       
 #endif  
-
 
 }
