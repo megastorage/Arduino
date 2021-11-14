@@ -467,11 +467,6 @@ float getTemperature(const byte addr[]) {
   /* Calcul de la température en degré Celsius */
   return (int16_t) ((data[1] << 8) | data[0]) * 0.0625; 
 }
-/*
-// Page HTML
-const char index_html[] PROGMEM = R"=====(
-   
-)=====";*/
 
 void Base_PH_4(){
   Call_By="Base PH 4 Start";
@@ -511,7 +506,7 @@ void Base_PH_10(){
 
 void UpdatePH(){
   Call_By="";
-  Call_By.concat(TempSend);
+  Call_By.concat(PHSend);
   serverWeb.send(200, "text/plain", Call_By); 
 }
 
@@ -743,5 +738,6 @@ if (!((LastPH == PHSend) and (LastTemp == TempSend))){
     display.clearDisplay();
     display.display();
   }
+
 
 }
