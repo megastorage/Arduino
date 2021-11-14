@@ -1,0 +1,731 @@
+//#include <Arduino.h>
+
+#include <FS.h>
+
+/*WIFI*/
+#define WIFI_ON // Activation du wifi
+#define ESP8266
+
+#ifdef ESP8266
+  #include <ESP8266WiFi.h>
+#elif ESP32
+      /* ESP32 Dependencies */
+      #include <WiFi.h>
+#endif
+
+#ifdef WIFI_ON
+   
+  #ifdef ESP8266
+    /* ESP8266 Dependencies */
+    #include "ESP8266WebServer.h"
+    ESP8266WebServer serverWeb(80); 
+  #elif ESP32
+   /* ESP32 Dependencies */
+  
+  #include <AsyncTCP.h>
+   #include <ESPAsyncWebServer.h>
+  #endif
+   
+#endif
+
+/*RAM Lecture / ecriture*/
+#include <EEPROM.h> 
+int addr_PH_ACID = 0;         // PH_ACID index
+int addr_Conv_ACID = 5;         // Conv_ACID index
+int addr_PH_BASIC = 10;         // PH_BASIC index
+int addr_Conv_BASIC = 15;         // Conv_BASIC index
+int calc_CONV_ACID;
+int calc_PH_ACID;
+int calc_PH_BASIC;
+int calc_CONV_BASIC;
+
+
+
+/* Ecran */
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+ 
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#define OLED_address  0x3c //Def adress ecran
+
+
+/*convertisseur pour PH*/
+#include <Adafruit_ADS1X15.h>
+
+//ADS1115
+Adafruit_ADS1115 ads; /* Use this for the 16-bit version */
+
+/* On Wire*/
+#include <OneWire.h>
+
+// Data wire is plugged into port 4 on the Arduino or ESP32
+#define ONE_WIRE_BUS 4 // Entrée D2
+#define TEMPERATURE_PRECISION 10
+#define THN132N
+
+// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+OneWire ds(ONE_WIRE_BUS);
+
+
+// Tableaux contenant l'adresse de chaque sonde OneWire | arrays to hold device addresses
+const byte SENSOR_ADDRESS_1[] = { 0x28,  0xFF,  0xCA,  0xD9,  0x2,  0x17,  0x3,  0x6A};
+
+
+/* Def des variables*/ 
+float TempSend = 0.0;
+float PHSend = 0.0;
+float LastTemp = 0.0;
+float LastPH =0.0;
+float adc_resolution = 1024.0;
+float voltage=0.0;
+const byte TX_PIN = 15;
+const unsigned long TIME = 512;
+const unsigned long TWOTIME = TIME*2;
+int PHSensor = 5;  // Entrée D1
+int samples = 25;
+int16_t adc0, adc1, adc2, adc3;
+#define SEND_HIGH() digitalWrite(TX_PIN, HIGH)
+#define SEND_LOW() digitalWrite(TX_PIN, LOW)
+String Call_By=" ";
+ 
+// Buffer for Oregon message
+#ifdef THN132N
+  byte OregonMessageBuffer[8];
+#else
+  byte OregonMessageBuffer[9];
+#endif
+ 
+/**
+ * \brief    Send logical "0" over RF
+ * \details  azero bit be represented by an off-to-on transition
+ * \         of the RF signal at the middle of a clock period.
+ * \         Remenber, the Oregon v2.1 protocol add an inverted bit first 
+ */
+inline void sendZero(void) 
+{
+  SEND_HIGH();
+  delayMicroseconds(TIME);
+  SEND_LOW();
+  delayMicroseconds(TWOTIME);
+  SEND_HIGH();
+  delayMicroseconds(TIME);
+}
+ 
+/**
+ * \brief    Send logical "1" over RF
+ * \details  a one bit be represented by an on-to-off transition
+ * \         of the RF signal at the middle of a clock period.
+ * \         Remenber, the Oregon v2.1 protocol add an inverted bit first 
+ */
+inline void sendOne(void) 
+{
+   SEND_LOW();
+   delayMicroseconds(TIME);
+   SEND_HIGH();
+   delayMicroseconds(TWOTIME);
+   SEND_LOW();
+   delayMicroseconds(TIME);
+}
+ 
+/**
+* Send a bits quarter (4 bits = MSB from 8 bits value) over RF
+*
+* @param data Source data to process and sent
+*/
+ 
+/**
+ * \brief    Send a bits quarter (4 bits = MSB from 8 bits value) over RF
+ * \param    data   Data to send
+ */
+inline void sendQuarterMSB(const byte data) 
+{
+  (bitRead(data, 4)) ? sendOne() : sendZero();
+  (bitRead(data, 5)) ? sendOne() : sendZero();
+  (bitRead(data, 6)) ? sendOne() : sendZero();
+  (bitRead(data, 7)) ? sendOne() : sendZero();
+}
+ 
+/**
+ * \brief    Send a bits quarter (4 bits = LSB from 8 bits value) over RF
+ * \param    data   Data to send
+ */
+inline void sendQuarterLSB(const byte data) 
+{
+  (bitRead(data, 0)) ? sendOne() : sendZero();
+  (bitRead(data, 1)) ? sendOne() : sendZero();
+  (bitRead(data, 2)) ? sendOne() : sendZero();
+  (bitRead(data, 3)) ? sendOne() : sendZero();
+}
+
+
+ /* Désactivation du wifi */
+void DisableWifi(void)
+{
+ WiFi.disconnect();
+ WiFi.mode(WIFI_OFF);
+ WiFi.forceSleepBegin();
+}
+ 
+/******************************************************************/
+/******************************************************************/
+/******************************************************************/
+ 
+/**
+ * \brief    Send a buffer over RF
+ * \param    data   Data to send
+ * \param    size   size of data to send
+ */
+void sendData(byte *data, byte size)
+{
+  for(byte i = 0; i < size; ++i)
+  {
+    sendQuarterLSB(data[i]);
+    sendQuarterMSB(data[i]);
+  }
+}
+ 
+/**
+ * \brief    Send an Oregon message
+ * \param    data   The Oregon message
+ */
+void sendOregon(byte *data, byte size)
+{
+    sendPreamble();
+    //sendSync();
+    sendData(data, size);
+    sendPostamble();
+}
+ 
+/**
+ * \brief    Send preamble
+ * \details  The preamble consists of 16 "1" bits
+ */
+inline void sendPreamble(void)
+{
+  byte PREAMBLE[]={0xFF,0xFF};
+  sendData(PREAMBLE, 2);
+}
+ 
+/**
+ * \brief    Send postamble
+ * \details  The postamble consists of 8 "0" bits
+ */
+inline void sendPostamble(void)
+{
+#ifdef THN132N
+  sendQuarterLSB(0x00);
+#else
+  byte POSTAMBLE[]={0x00};
+  sendData(POSTAMBLE, 1);  
+#endif
+}
+ 
+/**
+ * \brief    Send sync nibble
+ * \details  The sync is 0xA. It is not use in this version since the sync nibble
+ * \         is include in the Oregon message to send.
+ */
+inline void sendSync(void)
+{
+  sendQuarterLSB(0xA);
+}
+ 
+/******************************************************************/
+/******************************************************************/
+/******************************************************************/
+ 
+/**
+ * \brief    Set the sensor type
+ * \param    data       Oregon message
+ * \param    type       Sensor type
+ */
+inline void setType(byte *data, byte* type) 
+{
+  data[0] = type[0];
+  data[1] = type[1];
+}
+ 
+/**
+ * \brief    Set the sensor channel
+ * \param    data       Oregon message
+ * \param    channel    Sensor channel (0x10, 0x20, 0x30)
+ */
+inline void setChannel(byte *data, byte channel) 
+{
+    data[2] = channel;
+}
+ 
+/**
+ * \brief    Set the sensor ID
+ * \param    data       Oregon message
+ * \param    ID         Sensor unique ID
+ */
+inline void setId(byte *data, byte ID) 
+{
+  data[3] = ID;
+}
+ 
+/**
+ * \brief    Set the sensor battery level
+ * \param    data       Oregon message
+ * \param    level      Battery level (0 = low, 1 = high)
+ */
+void setBatteryLevel(byte *data, byte level)
+{
+  if(!level) data[4] = 0x0C;
+  else data[4] = 0x00;
+}
+ 
+/**
+ * \brief    Set the sensor temperature
+ * \param    data       Oregon message
+ * \param    temp       the temperature
+ */
+void setTemperature(byte *data, float temp) 
+{
+  // Set temperature sign
+  if(temp < 0)
+  {
+    data[6] = 0x08;
+    temp *= -1;  
+  }
+  else
+  {
+    data[6] = 0x00;
+  }
+ 
+  // Determine decimal and float part
+  int tempInt = (int)temp;
+  int td = (int)(tempInt / 10);
+  int tf = (int)round((float)((float)tempInt/10 - (float)td) * 10);
+ 
+  int tempFloat =  (int)round((float)(temp - (float)tempInt) * 10);
+ 
+  // Set temperature decimal part
+  data[5] = (td << 4);
+  data[5] |= tf;
+ 
+  // Set temperature float part
+  data[4] |= (tempFloat << 4);
+  Serial.println(temp);
+}
+ 
+/**
+ * \brief    Set the sensor humidity
+ * \param    data       Oregon message
+ * \param    hum        the humidity
+ */
+void setHumidity(byte* data, byte hum)
+{
+    data[7] = (hum/10);
+    data[6] |= (hum - data[7]*10) << 4;
+}
+ 
+/**
+ * \brief    Sum data for checksum
+ * \param    count      number of bit to sum
+ * \param    data       Oregon message
+ */
+int Sum(byte count, const byte* data)
+{
+  int s = 0;
+ 
+  for(byte i = 0; i<count;i++)
+  {
+    s += (data[i]&0xF0) >> 4;
+    s += (data[i]&0xF);
+  }
+ 
+  if(int(count) != count)
+    s += (data[count]&0xF0) >> 4;
+ 
+  return s;
+}
+ 
+/**
+ * \brief    Calculate checksum
+ * \param    data       Oregon message
+ */
+void calculateAndSetChecksum(byte* data)
+{
+#ifdef THN132N
+    int s = ((Sum(6, data) + (data[6]&0xF) - 0xa) & 0xff);
+ 
+    data[6] |=  (s&0x0F) << 4;     data[7] =  (s&0xF0) >> 4;
+#else
+    data[8] = ((Sum(8, data) - 0xa) & 0xFF);
+#endif
+}
+ 
+/******************************************************************/
+/******************************************************************/
+/******************************************************************/
+
+/*Oregon*/
+
+void oregon_send( byte ID, float TempSend){
+ 
+  setId(OregonMessageBuffer, ID);
+  // Get Temperature, humidity and battery level from sensors
+  // (ie: 1wire DS18B20 for température, ...)
+  setBatteryLevel(OregonMessageBuffer, 0); // 0 : low, 1 : high
+  setTemperature(OregonMessageBuffer, TempSend);
+ 
+  #ifndef THN132N
+    // Set Humidity
+    setHumidity(OregonMessageBuffer, 52);
+  #endif  
+ 
+  // Calculate the checksum
+  calculateAndSetChecksum(OregonMessageBuffer);
+ 
+  // Show the Oregon Message
+    for (byte i = 0; i < sizeof(OregonMessageBuffer); ++i)   {     Serial.print(OregonMessageBuffer[i] >> 4, HEX);
+      Serial.print(OregonMessageBuffer[i] & 0x0F, HEX);
+    }
+ 
+  // Send the Message over RF
+  sendOregon(OregonMessageBuffer, sizeof(OregonMessageBuffer));
+  // Send a "pause"
+  SEND_LOW();
+  delayMicroseconds(TWOTIME*8);
+  // Send a copie of the first message. The v2.1 protocol send the
+  // message two time 
+  sendOregon(OregonMessageBuffer, sizeof(OregonMessageBuffer));
+ 
+  // Wait for 30 seconds before send a new message 
+  SEND_LOW();
+
+}
+
+float ph (float voltage) {
+   //return 7 + ((1.65 - voltage) / 0.18);
+   return 21.6538 - (voltage * 5.7692);
+   //return (voltage);
+}
+
+/**
+ * Fonction de lecture de la température via un capteur DS18B20.
+ */
+float getTemperature(const byte addr[]) {
+  byte data[9];
+  // data[] : Données lues depuis le scratchpad
+  // addr[] : Adresse du module 1-Wire détecté
+  
+  /* Reset le bus 1-Wire et sélectionne le capteur */
+  ds.reset();
+  ds.select(addr);
+  
+  /* Lance une prise de mesure de température et attend la fin de la mesure */
+  ds.write(0x44, 1);
+  delay(800);
+  
+  /* Reset le bus 1-Wire, sélectionne le capteur et envoie une demande de lecture du scratchpad */
+  ds.reset();
+  ds.select(addr);
+  ds.write(0xBE);
+ 
+ /* Lecture du scratchpad */
+  for (byte i = 0; i < 9; i++) {
+    data[i] = ds.read();
+  }
+   
+  /* Calcul de la température en degré Celsius */
+  return (int16_t) ((data[1] << 8) | data[0]) * 0.0625; 
+}
+/*
+// Page HTML
+const char index_html[] PROGMEM = R"=====(
+   
+)=====";*/
+
+void handleRoot() {
+  //String temp(reinterpret_cast<const __FlashStringHelper *> (index_html));
+  //temp.replace("%LED%",Call_By);
+ // serverWeb.send(200, "text/html", index_html);
+}
+
+void Base_PH_4(){
+  Call_By="Base PH 4 Start";
+   serverWeb.send(200, "text/plain", Call_By);
+   Serial.print("Before to send ON PH4: ");
+   
+   int PHSend_EEPROM = int (PHSend * 100);
+   Serial.println(PHSend_EEPROM);
+
+   Clear_EEPROM(addr_PH_ACID);
+   EEPROM.put(addr_PH_ACID, PHSend_EEPROM);
+   
+   
+   Serial.println("");
+  if (EEPROM.commit()) {
+    Serial.println("Data successfully committed");
+  } else {
+    Serial.println("ERROR! Data commit failed");
+  }
+
+  Serial.println("");
+  Serial.println("Check writing");
+  Serial.print("Send for print: ");
+  Serial.println(PHSend);
+  Serial.print("Acid PH: ");
+   read_EPPROM(addr_PH_ACID,calc_PH_ACID);
+   
+}
+
+void Base_PH_10(){
+  Call_By="Base PH 10 ";
+  serverWeb.send(200, "text/plain", Call_By);
+  
+  Serial.print("Before to send on PH10: ");
+   Serial.println(adc0);
+   Clear_EEPROM(addr_Conv_ACID);
+   EEPROM.put(addr_Conv_ACID, adc0);
+ 
+
+   Serial.println("");
+  if (EEPROM.commit()) {
+    Serial.println("Data successfully committed");
+  } else {
+    Serial.println("ERROR! Data commit failed");
+  }
+ 
+  Serial.println("");
+  Serial.println("Send for print: ");
+  Serial.println(adc0);
+  Serial.print("Acid Conv: ");
+   read_EPPROM(addr_Conv_ACID,calc_CONV_ACID);
+}
+
+void Clear_EEPROM(int addresse){
+   // write a 0 to all 512 bytes of the EEPROM
+  for (int i = addresse; i < (addresse + 5); i++) {
+    EEPROM.write(i, 0);
+  }
+  Serial.println("Clear EEPROM DONE");
+}
+
+void UpdatePH(){
+  Call_By="";
+  Call_By.concat(TempSend);
+  serverWeb.send(200, "text/plain", Call_By);
+ 
+}
+
+void UpdateCONV(){
+  Call_By="";
+  Call_By.concat(adc0);
+  serverWeb.send(200, "text/plain", Call_By);
+  
+ 
+}
+
+void read_EPPROM(int addresse, int &variable){
+  Serial.println("Check writing");
+  
+  
+    EEPROM.get(addresse,variable);
+ 
+  Serial.println(variable);
+}
+
+void setup()
+{
+   Serial.begin(115200);
+   delay(2000);
+  
+   if (!SPIFFS.begin())
+  {
+    // Serious problem
+    Serial.println("SPIFFS Mount failed");
+  } else {
+    Serial.println("SPIFFS Mount succesfull");
+  }
+  
+  /* Lecture EPPROM*/
+  EEPROM.begin(20);
+  read_EPPROM(addr_PH_ACID, calc_PH_ACID);
+  read_EPPROM(addr_Conv_ACID,calc_CONV_ACID);
+  read_EPPROM(addr_PH_BASIC,calc_PH_BASIC);
+  read_EPPROM(addr_Conv_BASIC,calc_CONV_BASIC);
+  
+  #ifndef WIFI_ON
+    DisableWifi();
+  #else
+    Serial.println("Wifi on");
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP("ESP8266_PH", "ESP8266_Etallonage"); //mot de passe de plus de 8 caracteres 
+        //demarrage du serveur
+
+      serverWeb.serveStatic("/img", SPIFFS, "/img");
+      serverWeb.serveStatic("/", SPIFFS, "/index.html");
+      serverWeb.on("/Base_PH_4",Base_PH_4);
+      serverWeb.on("/Base_PH_10",Base_PH_10);
+      serverWeb.on("/UpdatePH",UpdatePH);
+      serverWeb.on("/UpdateCONV",UpdateCONV);
+     // serverWeb.on("/",handleRoot);
+     // serverWeb.on("/index.html",handleRoot);
+      serverWeb.begin();
+  #endif
+
+ 
+
+
+/* I2C*/
+  Wire.begin(0,2);
+
+/* ADS module conversion*/
+     ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)    // activate this if you are using a 5V sensor, this one should  be used with Arduino boards
+  // ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV               // As the sensor is powered up using 3.3V, this one should be used with 3.3v controller boards
+  // ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 1mV      0.0625mV
+  // ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.5mV    0.03125mV
+  // ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
+  // ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
+
+  ads.begin();
+
+  
+/* Ecran */
+
+// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+ 
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;); // Don't proceed, loop forever
+  }
+  Serial.println(F("Initialized!"));
+ 
+  // Show initial display buffer contents on the screen --
+  // the library initializes this with an Adafruit splash screen.
+  display.display();
+  delay(2000); // Pause for 2 seconds
+ 
+  // Clear the buffer
+  display.clearDisplay();
+  // Refresh (apply command)
+  display.display();
+ 
+ 
+ /* Exemple de prog*/
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  display.println("Demarrage");
+  display.println("en cours");
+  display.display();
+
+  
+  /*Protocol Oregon*/
+  pinMode(TX_PIN, OUTPUT);
+  Serial.println("\n[Oregon V2.1 encoder]");
+
+  SEND_LOW();  
+ 
+#ifdef THN132N  
+  // Create the Oregon message for a temperature only sensor (TNHN132N)
+  byte ID[] = {0xEA,0x4C};
+#else
+  // Create the Oregon message for a temperature/humidity sensor (THGR2228N)
+  byte ID[] = {0x1A,0x2D};
+#endif  
+ 
+  setType(OregonMessageBuffer, ID);
+  setChannel(OregonMessageBuffer, 0x20);
+ 
+}
+
+ 
+void loop()
+{
+// Gestion des cliet qui se connectent
+serverWeb.handleClient();
+    
+   /* Sonde PH*/ 
+   float measurings=0, volt0;
+
+    for (int i = 0; i < samples; i++)
+    {
+       /*Lecture PH depuis entrée direct EPS8266*/
+       // measurings += analogRead(PHSensor);
+       
+       /* Module ADS1115*/
+      adc0 = ads.readADC_SingleEnded(0);  // Lecture PH depuis entrée 0
+      //adc1 = ads.readADC_SingleEnded(1);
+      //adc2 = ads.readADC_SingleEnded(2);
+      //adc3 = ads.readADC_SingleEnded(3);
+      volt0 = ads.computeVolts(adc0);
+      measurings += volt0;
+        delay(10);
+    }
+
+    voltage = measurings/samples;
+
+
+  /*Oregon*/
+
+ PHSend= ph(voltage);
+        
+  float temperature_Sonde[0];
+   
+  /* Lit les températures des trois capteurs */
+  temperature_Sonde[0] = getTemperature(SENSOR_ADDRESS_1);
+  //temperature_Sonde[1] = getTemperature(SENSOR_ADDRESS_2);
+  //temperature_Sonde[2] = getTemperature(SENSOR_ADDRESS_3);
+  
+  /* Affiche les températures */
+  
+  TempSend=temperature_Sonde[0], 2;
+
+  Serial.println();
+  Serial.println("Start Oregon PH");
+  Serial.print("Calcul PH: ");
+  Serial.println(PHSend);
+  Serial.print("Voltage: ");
+  Serial.println(voltage);
+  Serial.print("Voltage Direct: ");
+  Serial.println(ads.computeVolts(adc0));
+  /*Oregon*/
+
+  Serial.println("Start Oregon Temp");
+  
+ 
+if (!((LastPH == PHSend) and (LastTemp == TempSend))){
+  //Envoie des valeurs.
+  oregon_send(0xBB,TempSend);
+  oregon_send(0xCC,PHSend);
+  LastPH = PHSend;
+  LastTemp = TempSend;
+  
+  // text display tests
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  display.print("Eau:");
+  display.print(TempSend);
+  display.println("C");
+  display.println();
+  display.print("PH: ");
+  display.println(PHSend);
+  display.println(adc0);
+  display.display();
+  }
+  else {
+    display.clearDisplay();
+    display.display();
+  }
+#ifdef WIFI_ON
+    //Utilisation des objets
+    
+     
+#endif  
+
+
+}
