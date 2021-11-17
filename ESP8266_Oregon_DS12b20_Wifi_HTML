@@ -12,6 +12,12 @@
   * https://github.com/me-no-dev/AsyncTCP
   * https://tommydesrochers.com/
   * http://geii.eu/
+  * 
+  * config des pin ESP8266
+  * RF433 Sur pin D8
+  * Sonde OneWire sur Pin D2
+  * SDA D3
+  * SCL D4
   */
  
  //#include <Arduino.h>
