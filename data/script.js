@@ -1,8 +1,8 @@
 $(document).ready(function(){
     $("#PH4Button").click(function(){
         var valeur = $("#PH4_Base_Value").val();
-        if (valeur > 7.0){
-            alert('Valeur PH4 Base Non Correct');
+        if ((valeur > 5.0) || (valeur <2.0)) {
+            alert('Valeur PH4 Base Non Correct 2.0 < PH_Base4 > 5.0');
         }
         else{
         $.post("SendPH4Value",{
@@ -15,8 +15,8 @@ $(document).ready(function(){
 $(document).ready(function(){
     $("#PH10Button").click(function(){
         var valeur = $("#PH10_Base_Value").val();
-        if (valeur < 7.0){
-            alert('Valeur PH10 Base Non Correct');
+        if ((valeur < 8.0) || (valeur >12.0)){
+            alert('Valeur PH10 Base Non Correct 8.0 < PH_Base10 > 12.0');
         }
         else{
             $.post("SendPH10Value",{
