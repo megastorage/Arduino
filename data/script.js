@@ -1,18 +1,28 @@
 $(document).ready(function(){
     $("#PH4Button").click(function(){
         var valeur = $("#PH4_Base_Value").val();
+        if (valeur > 7.0){
+            alert('Valeur PH4 Base Non Correct');
+        }
+        else{
         $.post("SendPH4Value",{
             valeurPH4_Base: valeur
         });
+        }
     });
 });
 
 $(document).ready(function(){
     $("#PH10Button").click(function(){
         var valeur = $("#PH10_Base_Value").val();
-        $.post("SendPH10Value",{
-            valeurPH10_Base: valeur
-        });
+        if (valeur < 7.0){
+            alert('Valeur PH10 Base Non Correct');
+        }
+        else{
+            $.post("SendPH10Value",{
+                valeurPH10_Base: valeur
+            });
+        }
     });
 });
 
