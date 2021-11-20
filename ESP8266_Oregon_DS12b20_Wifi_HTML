@@ -630,10 +630,7 @@ void setup()
     #else
       
       Serial.println("\n----DIR: /");
-        listDir("");
- 
-      Serial.println("\n----DIR: /data:");
-        listDir("/data");
+        listDir("/");
     #endif
     
     //----------------------------------------------------WIFI
