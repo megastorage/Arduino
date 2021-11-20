@@ -2,7 +2,15 @@
  /* Systeme etalonnage sonde PH
   * Integration de deux sondes virtuel Oregon scientifique pour envoie à la domotique en RF433
   * Auto configuration suivant type de carte ESP8266 // EPS32
-  * ESP32 A verifier
+  * 
+  * RF433 ESP8266 Pin D8 ESP32 Pin D15
+  * 
+  * Onwire ESP8266 Pin D2   ESP32 Pin D4
+  * 
+  *     ESP8266                 ESP32
+  * SDA=D0    SCL=D2         SDA=D21  SCL=D22
+  * 
+  * 
   * Il faut inclure les lib ESPAsyncWeb et TCP manuellement
   * https://github.com/me-no-dev/ESPAsyncWebServer
   * Esp8266
@@ -33,6 +41,8 @@
   /* Gestion des Fichiers*/
   # include <FS.h>
 
+  /* Position des PIN  */
+  
 #else
       /* ESP32 Dependencies */
       #include <SPIFFS.h>
@@ -62,12 +72,23 @@
 
 #ifdef Ecran 
   #include <Wire.h> 
+
+  #ifdef ESP8266
+    int SDA_Send= 0, SCL_Send=2;
+  #else
+    int SDA_Send= 21, SCL_Send=22;
+  #endif
 #endif
 
 #ifndef Ecran
   #ifdef SondePH 
     #include <Wire.h>
-  #endif
+      #ifdef ESP8266
+        int SDA_Send= 0, SCL_Send=2;
+      #else
+        int SDA_Send= 21, SCL_Send=22;
+      #endif
+    #endif
 #endif
 
 #ifdef SondePH
@@ -109,6 +130,7 @@
   #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
   Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
   #define OLED_address  0x3c //Def adress ecran
+  
 #endif
 
 
@@ -139,8 +161,7 @@
   const byte TX_PIN = 15;
   const unsigned long TIME = 512;
   const unsigned long TWOTIME = TIME*2;
-  int PHSensor = 5;  // Entrée D1
-  
+     
   #define SEND_HIGH() digitalWrite(TX_PIN, HIGH)
   #define SEND_LOW() digitalWrite(TX_PIN, LOW)
 #endif
@@ -523,8 +544,8 @@
      int PHSend_EEPROM = int (valeurPH4_Base * 100);
      Serial.println(PHSend_EEPROM);
      
-     // Update_EEPROM(addr_PH_ACID, PHSend_EEPROM);
-     // Update_EEPROM(addr_Conv_ACID, adc0);
+     Update_EEPROM(addr_PH_ACID, PHSend_EEPROM);
+     Update_EEPROM(addr_Conv_ACID, adc0);
   
     Serial.println("");
      read_EEPROM(addr_PH_ACID,calc_PH_ACID);
@@ -538,8 +559,8 @@
      int PHSend_EEPROM = int (valeurPH10_Base * 100);
      Serial.println(PHSend_EEPROM);
      
-     //Update_EEPROM(addr_PH_BASIC, PHSend_EEPROM);
-     //Update_EEPROM(addr_Conv_BASIC, adc0);
+     Update_EEPROM(addr_PH_BASIC, PHSend_EEPROM);
+     Update_EEPROM(addr_Conv_BASIC, adc0);
      
     Serial.println("");
     Serial.println("Send for print: ");
@@ -578,6 +599,7 @@
      // write a 0 to all 512 bytes of the EEPROM
     for (int i = addresse; i < (addresse + 5); i++) {
       EEPROM.write(i, 0);
+      EEPROM.commit();
     }
     Serial.println("Clear Address");
     Serial.println(addresse);
@@ -731,7 +753,7 @@ void setup()
 #ifndef Ecran
   #ifdef SondePH
     /* I2C*/
-    Wire.begin(0,2);
+    Wire.begin(SDA_Send,SCL_Send);
   #endif
 #endif
 
