@@ -56,8 +56,7 @@
     #include <ESP8266WiFi.h>
     #include <ESPAsyncWebServer.h>
     #include <ESPAsyncTCP.h>
-    AsyncWebServer server(80);
-  
+    
     /*OTA */
    
 #else
