@@ -56,7 +56,8 @@
     #include <ESP8266WiFi.h>
     #include <ESPAsyncWebServer.h>
     #include <ESPAsyncTCP.h>
-    
+    AsyncWebServer server(80);
+  
     /*OTA */
    
 #else
@@ -126,9 +127,9 @@
   #define SCREEN_HEIGHT 64 // OLED display height, in pixels
    
   // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
-  #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+   #define OLED_RESET     4 // Reset pin # (or -1 if sharing Arduino reset pin)
+  #define SCREEN_ADDRESS 0x3c ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
   Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-  #define OLED_address  0x3c //Def adress ecran
   
 #endif
 
@@ -758,7 +759,7 @@ void setup()
 
 #ifdef Ecran
   /* I2C*/
-  Wire.begin(0,2);
+  Wire.begin(SDA_Send,SCL_Send);
 #endif
 
 #ifdef SondePH
