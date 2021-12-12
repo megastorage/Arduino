@@ -546,8 +546,8 @@
       else if (Result_PH < 0.0){
          Result_PH =0.0;
       }
-     return Result_PH;
-   
+     
+      return Result_PH;
   }
   
   /********* Etalonnage PH base 4 *********/
@@ -968,9 +968,15 @@ void loop(){
   #endif
   
   #ifdef SondePH
-    display.print("PH: ");
-    display.println(PHSend);
-    display.printf("Conv:%i",adc0); 
+    
+    if ( ((calc_CONV_ACID + 500) < adc0) || ((calc_CONV_BASIC - 500)> adc0)){
+       display.printf("PH Value Out: %i",adc0); 
+      }
+    else{
+      display.print("PH: ");
+      display.println(PHSend);
+      display.printf("Conv:%i",adc0); 
+    }
   #endif
  display.display();
 #endif
