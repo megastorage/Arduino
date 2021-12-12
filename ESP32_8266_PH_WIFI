@@ -970,7 +970,7 @@ void loop(){
   #ifdef SondePH
     
     if ( ((calc_CONV_ACID + 500) < adc0) || ((calc_CONV_BASIC - 500)> adc0)){
-       display.printf("PH Value Out: %i",adc0); 
+       display.printf("Conv Value\nOut: %i",adc0); 
       }
     else{
       display.print("PH: ");
