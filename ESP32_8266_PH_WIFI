@@ -533,7 +533,7 @@
       Serial.println("Calcul PH values");
       Serial.printf("Coef A: %f\n",coef_a);
       Serial.printf("Coef B: %f\n",coef_b);
-      Serial.printf("Conv Input: %i\n",Conv_Input);
+      Serial.printf("Conv Input: %f\n",Conv_Input);
       Serial.printf("PH result: %f\n",Result_PH/100);
       Serial.printf("Coef A * Input= %f\n",Conv_Input * coef_a);
       Serial.println("---------------------------");
