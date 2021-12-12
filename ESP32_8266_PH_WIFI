@@ -449,7 +449,7 @@
   
   void oregon_send( byte ID, float TempSend){
     Serial.println(" ");
-    Serial.println(" ***** Start Oregon Send ***** ");
+    Serial.println("***** Start Oregon Send *****");
     setId(OregonMessageBuffer, ID);
     // Get Temperature, humidity and battery level from sensors
     // (ie: 1wire DS18B20 for température, ...)
@@ -481,7 +481,7 @@
     // Wait for 30 seconds before send a new message 
     SEND_LOW();
   Serial.println(" ");
-  Serial.println(" ***** END ***** ");
+  Serial.println("***** END *****");
   }
 #endif
 
@@ -531,11 +531,11 @@
       Serial.println("");
       Serial.println("---------------------------");
       Serial.println("Calcul PH values");
-      Serial.println(coef_a);
-      Serial.println(coef_b);
-      Serial.println(Conv_Input);
-      Serial.println(Result_PH);
-      Serial.println(Conv_Input * coef_a);
+      Serial.printf("Coef A: %f\n",coef_a);
+      Serial.printf("Coef B: %f\n",coef_b);
+      Serial.printf("Conv Input: %i\n",Conv_Input);
+      Serial.printf("PH result: %f\n",Result_PH/100);
+      Serial.printf("Coef A * Input= %f\n",Conv_Input * coef_a);
       Serial.println("---------------------------");
       Serial.println("");
       Result_PH = Result_PH/100;
@@ -555,7 +555,7 @@
      Serial.print("Before to send ON PH4: ");
      
      int PHSend_EEPROM = int (valeurPH4_Base * 100);
-     Serial.println(PHSend_EEPROM);
+     Serial.printf("PH_Send to Eeprom: %Pi\n",PHSend_EEPROM);
      
      #ifdef ESP8266
         Update_EEPROM(addr_PH_ACID, PHSend_EEPROM);
@@ -563,9 +563,8 @@
 
         /***** DEBUG *****/
         Serial.println("");
-        Serial.println("Send for print: ");
-        Serial.println(adc0);
-        Serial.print("Acid Conv: ");
+        Serial.printf("PH ACID: %i\n",calc_PH_ACID);
+        Serial.printf("Cnv ACID: %i\n",calc_CONV_ACID);
         read_EEPROM(addr_PH_ACID,calc_PH_ACID);
 
      #else
@@ -575,10 +574,8 @@
          calc_PH_ACID = Base_Value.getInt("PH_Acid",0);
          calc_CONV_ACID = Base_Value.getInt("Conv_Acid",0);
     
-        Serial.print("PH ACID: ");
-        Serial.println(calc_PH_ACID);
-        Serial.print("Cnv ACID: ");
-        Serial.println(calc_CONV_ACID);
+        Serial.printf("PH ACID: %i\n",calc_PH_ACID);
+        Serial.printf("Cnv ACID: %i\n",calc_CONV_ACID);
             
      #endif
      
@@ -597,25 +594,21 @@
         
         /***** DEBUG *****/
         Serial.println("");
-        Serial.println("Send for print: ");
-        Serial.println(adc0);
-        Serial.print("Basic Conv: ");
+       Serial.printf("Send for print: %i\n",adc0);  
+        Serial.printf("PH BASIC: %i\n",calc_PH_BASIC);
+        Serial.printf("Conv BASIC: %i\n",calc_CONV_BASIC);
         read_EEPROM(addr_Conv_BASIC,calc_CONV_BASIC);
      #else
         Base_Value.putInt("PH_Basic",PHSend_EEPROM);
         Base_Value.putInt("Conv_Basic",adc0);
          /***** DEBUG *****/
         Serial.println("");
-        Serial.println("Send for print: ");
-        Serial.println(adc0);       
+        Serial.printf("Send for print: %i\n",adc0);   
 
         calc_PH_BASIC = Base_Value.getInt("PH_Basic",0);
         calc_CONV_BASIC = Base_Value.getInt("Conv_Basic",0);
-        Serial.print("PH BASIC: ");
-        Serial.println(calc_PH_BASIC);
-        Serial.print("Conv BASIC: ");
-        Serial.println(calc_CONV_BASIC);
-     
+        Serial.printf("PH BASIC: %i\n",calc_PH_BASIC);
+        Serial.printf("Conv BASIC: %i\n",calc_CONV_BASIC);
 
      #endif
     
@@ -780,8 +773,7 @@ void setup()
         String message;
         message = request->getParam("valeurPH10_Base", true)->value();
         valeurPH10_Base = message.toFloat();
-         Serial.println("Send PH10 value :");
-         Serial.println(valeurPH10_Base);
+         Serial.printf("Send PH10 value : %f\n",valeurPH10_Base);
          Base_PH_10();
         request->send(204);
     });
@@ -812,14 +804,10 @@ void setup()
     calc_PH_BASIC = Base_Value.getInt("PH_Basic",0);
     calc_CONV_BASIC = Base_Value.getInt("Conv_Basic",0);
 
-    Serial.print("PH ACID: ");
-    Serial.println(calc_PH_ACID);
-    Serial.print("Cnv ACID: ");
-    Serial.println(calc_CONV_ACID);
-    Serial.print("PH BASIC: ");
-    Serial.println(calc_PH_BASIC);
-    Serial.print("Conv BASIC: ");
-    Serial.println(calc_CONV_BASIC);
+    Serial.printf("PH ACID: %i\n",calc_PH_ACID);
+    Serial.printf("Cnv ACID: %i\n",calc_CONV_ACID);
+    Serial.printf("PH BASIC: %i\n",calc_PH_BASIC);
+    Serial.printf("Conv BASIC: %i\n",calc_CONV_BASIC);
   #endif
 #endif
 
@@ -929,12 +917,9 @@ void loop(){
   Serial.println();
   Serial.println("***** LOOP PH ******");
   Serial.println("Start Oregon PH");
-  Serial.print("Calcul PH: ");
-  Serial.println(PHSend);
-  Serial.print("PH moyenne Input: ");
-  Serial.println(PH_Moyen_Input);
-  Serial.print("Voltage Direct: ");
-  Serial.println(ads.computeVolts(adc0));
+  Serial.printf("Calcul PH: %f\n",PHSend);
+  Serial.printf("PH moyenne Input: %f\n",PH_Moyen_Input);
+  Serial.printf("Voltage Direct: %f\n",ads.computeVolts(adc0));
   Serial.println("***** LOOP PH FIN ******");
 
   #ifdef RF433
@@ -957,8 +942,7 @@ void loop(){
   Serial.println();
   Serial.println("***** LOOP Temp ******");
   Serial.println("Start Oregon Temp");
-  Serial.print("Temperature Input: ");
-  Serial.println(TempSend);
+  Serial.printf("Temperature Input: %f\n", TempSend);
   Serial.println("***** LOOP Temp FIN ******");
 
   #ifdef RF433
@@ -986,7 +970,7 @@ void loop(){
   #ifdef SondePH
     display.print("PH: ");
     display.println(PHSend);
-    display.println(adc0); 
+    display.printf("Conv:%i",adc0); 
   #endif
  display.display();
 #endif
