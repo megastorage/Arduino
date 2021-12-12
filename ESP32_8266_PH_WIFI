@@ -19,14 +19,13 @@
   * 
   * ESP32
   * https://github.com/me-no-dev/AsyncTCP
-  *Replace EEPROM par Preferences
   */
  
- //#include <Arduino.h>
+ #include <Arduino.h>
 
 /* Definition de la carte et options*/
 //#define ESP8266
-#define ESP32
+//#define ESP32
 #define SondePH
 #define SondeTEMP
 #define RF433
@@ -267,6 +266,32 @@
   }
    
   /**
+   * \brief    Send preamble
+   * \details  The preamble consists of 16 "1" bits
+   */
+  
+  inline void sendPreamble(void)
+  //void sendPreamble(void)
+  {
+    byte PREAMBLE[]={0xFF,0xFF};
+    sendData(PREAMBLE, 2);
+  }
+   
+  /**
+   * \brief    Send postamble
+   * \details  The postamble consists of 8 "0" bits
+   */
+  inline void sendPostamble(void)
+  //void sendPostamble(void)
+  {
+  #ifdef THN132N
+    sendQuarterLSB(0x00);
+  #else
+    byte POSTAMBLE[]={0x00};
+    sendData(POSTAMBLE, 1);  
+  #endif
+  }
+  /**
    * \brief    Send an Oregon message
    * \param    data   The Oregon message
    */
@@ -278,29 +303,6 @@
       sendPostamble();
   }
    
-  /**
-   * \brief    Send preamble
-   * \details  The preamble consists of 16 "1" bits
-   */
-  inline void sendPreamble(void)
-  {
-    byte PREAMBLE[]={0xFF,0xFF};
-    sendData(PREAMBLE, 2);
-  }
-   
-  /**
-   * \brief    Send postamble
-   * \details  The postamble consists of 8 "0" bits
-   */
-  inline void sendPostamble(void)
-  {
-  #ifdef THN132N
-    sendQuarterLSB(0x00);
-  #else
-    byte POSTAMBLE[]={0x00};
-    sendData(POSTAMBLE, 1);  
-  #endif
-  }
    
   /**
    * \brief    Send sync nibble
@@ -545,7 +547,6 @@
          Result_PH =0.0;
       }
      return Result_PH;
-     //return 21.6538 - (voltage * 5.7692);
    
   }
   
