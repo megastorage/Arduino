@@ -1,7 +1,12 @@
  /* Systeme etalonnage sonde PH
   * Integration de deux sondes virtuel Oregon scientifique pour envoie à la domotique en RF433
   * Auto configuration suivant type de carte ESP8266 // EPS32
+  * https://dl.espressif.com/dl/package_esp32_index.json
+  * https://arduino.esp8266.com/stable/package_esp8266com_index.json
   * 
+  * tools:
+  * https://github.com/me-no-dev/arduino-esp32fs-plugin/releases/
+  * https://github.com/esp8266/arduino-esp8266fs-plugin/releases
   * RF433 ESP8266 Pin D8 ESP32 Pin D15
   * 
   * Onwire ESP8266 Pin D2   ESP32 Pin D4
