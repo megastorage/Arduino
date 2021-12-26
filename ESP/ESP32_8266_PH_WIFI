@@ -62,7 +62,7 @@
     #include <ESP8266WiFi.h>
     #include <ESPAsyncWebServer.h>
     #include <ESPAsyncTCP.h>
-    AsyncWebServer server(80);
+    //AsyncWebServer server(80);
   
     /*OTA */
    
@@ -593,7 +593,7 @@
      int PHSend_EEPROM = int (valeurPH10_Base * 100);
      Serial.println(PHSend_EEPROM);
      
-     #ifdef ES8266
+     #ifdef ESP8266
         Update_EEPROM(addr_PH_BASIC, PHSend_EEPROM);
         Update_EEPROM(addr_Conv_BASIC, adc0);
         
@@ -697,7 +697,7 @@ void setup()
   Serial.println("");
   Serial.println("Start Read File system");
    
-    #ifdef EP8266
+    #ifdef ESP8266
      Dir dir = SPIFFS.openDir ("");
     while (dir.next ()) {
       Serial.println (dir.fileName ());
@@ -793,7 +793,7 @@ void setup()
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
  
-  #ifdef EPS8266
+  #ifdef ESP8266
     
     /* Lecture EEPROM*/
     EEPROM.begin(20);
