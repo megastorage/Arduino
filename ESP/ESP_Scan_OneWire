@@ -1,5 +1,5 @@
 #define Ecran
-#define ESP32
+//#define ESP32
 
 #ifdef Ecran
   /* Ecran */
