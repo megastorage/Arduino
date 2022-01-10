@@ -26,33 +26,73 @@
   * https://github.com/pellepl/spiffs
   */
  
- #include <Arduino.h>
+ 
+#include <Arduino.h>
 
 /* Definition de la carte et options*/
-//#define ESP8266
-//#define ESP32
 #define SondePH
+#define SondePression
 #define SondeTEMP
 #define RF433
 #define Ecran
 
 #ifdef SondePH
   #define WIFI_ON // Activation du wifi
+  #define ADS1X15
+
+  /*RAM Lecture / ecriture*/
+  int calc_CONV_ACID;
+  int calc_PH_ACID;
+  int calc_PH_BASIC;
+  int calc_CONV_BASIC;
+ 
+
+  #ifdef ESP8266
+     #include <EEPROM.h> 
+     /* Gestion des Fichiers*/
+     # include <FS.h>
+     /* Adresse dans l'EEPROM*/
+      int addr_PH_ACID = 0;         // PH_ACID index
+      int addr_Conv_ACID = 5;         // Conv_ACID index
+      int addr_PH_BASIC = 10;         // PH_BASIC index
+      int addr_Conv_BASIC = 15;         // Conv_BASIC index
+   #else
+     /* ESP32 Dependencies */
+     /* Gestion des Fichiers*/ 
+     #include <SPIFFS.h>
+     
+     /* EEPROM*/
+     #include <Preferences.h> 
+     Preferences Base_Value;
+  #endif
+  
+  /* Variables associées ADS1115 PH*/
+  float valeurPH4_Base,valeurPH10_Base;
+  float PHSend = 0.0;
+  float LastPH =0.0;
+  float PH_Moyen_Input=0.0;  
 #endif
 
+#ifdef SondePression
+  #ifndef SondePH
+    #define ADS1X15
+  #endif
+ float Pression_Moyen_Input=0.0;
+ float PressionCalc, PressionSend;
+ 
+#endif
 
-/* Include suivant la carte*/
-#ifdef ESP8266
-  
-  /* Gestion des Fichiers*/
-  # include <FS.h>
+#ifdef ADS1X15
+  /*convertisseur pour PH ADS1115*/
+  #include <Adafruit_ADS1X15.h>
+  Adafruit_ADS1115 ads; /* Use this for the 16-bit version */
 
-  /* Position des PIN  */
-  
-#else
-      /* ESP32 Dependencies */
-      #include <SPIFFS.h>
-      
+  /* Variables associées ADS1115 GLOBAL*/
+  int samples = 25; /* Nb d'echantillons*/
+  int16_t adc0, adc1, adc2, adc3;
+  float adc_resolution = 1024.0; /* Résolution */
+  float measurings0=0,measurings2=0, volt0, volt2;
+
 #endif
 
 #ifdef WIFI_ON
@@ -62,11 +102,8 @@
     #include <ESP8266WiFi.h>
     #include <ESPAsyncWebServer.h>
     #include <ESPAsyncTCP.h>
-    //AsyncWebServer server(80);
-  
-    /*OTA */
-   
-#else
+     
+  #else
    /* ESP32 Dependencies */
     #include <WiFi.h>
     #include <AsyncTCP.h>
@@ -76,77 +113,40 @@
   AsyncWebServer server(80); 
 #endif
 
-#ifdef Ecran 
-  #include <Wire.h> 
+#ifndef Ecran
+    #ifdef ADS1X15 
+      #define I2C_On
+    #endif
+#else
+  #define I2C_On 
+#endif
 
+#ifdef I2C_On 
+  #include <Wire.h>
+  
   #ifdef ESP8266
     int SDA_Send= 0, SCL_Send=2;
   #else
     int SDA_Send= 21, SCL_Send=22;
   #endif
-#endif
 
-#ifndef Ecran
-  #ifdef SondePH 
-    #include <Wire.h>
-      #ifdef ESP8266
-        int SDA_Send= 0, SCL_Send=2;
-      #else
-        int SDA_Send= 21, SCL_Send=22;
-      #endif
-    #endif
-#endif
-
-#ifdef SondePH
-  /*RAM Lecture / ecriture*/
-  int calc_CONV_ACID;
-  int calc_PH_ACID;
-  int calc_PH_BASIC;
-  int calc_CONV_BASIC;
-  
-  #ifdef ESP8266
-     #include <EEPROM.h> 
-
-     /* Adresse dans l'EEPROM*/
-      int addr_PH_ACID = 0;         // PH_ACID index
-      int addr_Conv_ACID = 5;         // Conv_ACID index
-      int addr_PH_BASIC = 10;         // PH_BASIC index
-      int addr_Conv_BASIC = 15;         // Conv_BASIC index
-   #else
-     #include <Preferences.h> 
-     Preferences Base_Value;
-  #endif
-  
-  /*convertisseur pour PH ADS1115*/
-  #include <Adafruit_ADS1X15.h>
-  Adafruit_ADS1115 ads; /* Use this for the 16-bit version */
-
-  /* Variables associées ADS1115 */
-  int samples = 25;
-  int16_t adc0, adc1, adc2, adc3;
-  float valeurPH4_Base,valeurPH10_Base;
-  float adc_resolution = 1024.0;
-  float PHSend = 0.0;
-  float LastPH =0.0;
-  float PH_Moyen_Input=0.0;  
 #endif
 
 #ifdef Ecran
   /* Ecran */
-
   #include <Adafruit_GFX.h>
   #include <Adafruit_SSD1306.h>
   
+  #define I2C_On
   #define SCREEN_WIDTH 128 // OLED display width, in pixels
   #define SCREEN_HEIGHT 64 // OLED display height, in pixels
    
   // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
-   #define OLED_RESET     4 // Reset pin # (or -1 if sharing Arduino reset pin)
+  #define OLED_RESET     4 // Reset pin # (or -1 if sharing Arduino reset pin)
   #define SCREEN_ADDRESS 0x3c ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
   Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
   
 #endif
-
 
 #ifdef SondeTEMP
   /* On Wire Sonde DS18B20*/
@@ -178,9 +178,7 @@
      
   #define SEND_HIGH() digitalWrite(TX_PIN, HIGH)
   #define SEND_LOW() digitalWrite(TX_PIN, LOW)
-#endif
 
-#ifdef RF433
   /********************************************* Simulation Sonde Oregon*********************************************/
   
   /* Buffer for Oregon message */
@@ -599,7 +597,7 @@
         
         /***** DEBUG *****/
         Serial.println("");
-       Serial.printf("Send for print: %i\n",adc0);  
+        Serial.printf("Send for print: %i\n",adc0);  
         Serial.printf("PH BASIC: %i\n",calc_PH_BASIC);
         Serial.printf("Conv BASIC: %i\n",calc_CONV_BASIC);
         read_EEPROM(addr_Conv_BASIC,calc_CONV_BASIC);
@@ -659,9 +657,8 @@
     #else
 
     #endif
-#endif
 
-#ifndef ESP8266
+    #ifndef ESP8266
   void listDir(char * dir){
  
         File root = SPIFFS.open(dir);
@@ -677,7 +674,10 @@
         }
        
       }
+  #endif
 #endif
+
+
 
 void setup()
 {
@@ -816,19 +816,12 @@ void setup()
   #endif
 #endif
 
-#ifndef Ecran
-  #ifdef SondePH
-    /* I2C*/
-    Wire.begin(SDA_Send,SCL_Send);
-  #endif
+#ifdef I2C_On
+      /* I2C*/
+      Wire.begin(SDA_Send,SCL_Send);
 #endif
 
-#ifdef Ecran
-  /* I2C*/
-  Wire.begin(SDA_Send,SCL_Send);
-#endif
-
-#ifdef SondePH
+#ifdef ADS1X15
   /* ADS module conversion*/
      ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)    // activate this if you are using a 5V sensor, this one should  be used with Arduino boards
   // ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV               // As the sensor is powered up using 3.3V, this one should be used with 3.3v controller boards
@@ -840,8 +833,7 @@ void setup()
   ads.begin();
 #endif
 
-#ifdef Ecran  
-  /* Ecran */
+#ifdef Ecran  /* Ecran */
 
 // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
  
@@ -860,7 +852,6 @@ void setup()
   display.clearDisplay();
   // Refresh (apply command)
   display.display();
- 
  
  /* Exemple de prog*/
   display.clearDisplay();
@@ -895,42 +886,74 @@ void setup()
 
 void loop(){
     
-#ifdef SondePH    
-   /* Sonde PH*/ 
-   float measurings=0, volt0;
+#ifdef ADS1X15  // Calcul des valeurs
+   measurings2=0;
+   measurings0=0;
 
     for (int i = 0; i < samples; i++)
     {
-       /*Lecture PH depuis entrée direct EPS8266*/
+       /*Lecture PH depuis entrée direct ESP8266*/
        // measurings += analogRead(PHSensor);
-       
-       /* Module ADS1115*/
-      adc0 = ads.readADC_SingleEnded(0);  // Lecture PH depuis entrée 0
+      
+      #ifdef SondePH
+        /* Module ADS1115*/
+        adc0 = ads.readADC_SingleEnded(0);  // Lecture PH depuis entrée 0
+        volt0 = ads.computeVolts(adc0);
+        measurings0 += adc0;
+      #endif
       //adc1 = ads.readADC_SingleEnded(1);
-      //adc2 = ads.readADC_SingleEnded(2);
+      #ifdef SondePression
+        adc2 = ads.readADC_SingleEnded(2);
+        volt2 = ads.computeVolts(adc2);
+        measurings2 += adc2;
+      #endif
       //adc3 = ads.readADC_SingleEnded(3);
-      volt0 = ads.computeVolts(adc0);
-     measurings += volt0;
-      //measurings += adc0;
     
         delay(10);
     }
 
-    PH_Moyen_Input = measurings/samples;
-    PHSend= ph(adc0, calc_PH_ACID,calc_PH_BASIC,calc_CONV_ACID,calc_CONV_BASIC );
-  
-  Serial.println();
-  Serial.println("***** LOOP PH ******");
-  Serial.println("Start Oregon PH");
-  Serial.printf("Calcul PH: %f\n",PHSend);
-  Serial.printf("PH moyenne Input: %f\n",PH_Moyen_Input);
-  Serial.printf("Voltage Direct: %f\n",ads.computeVolts(adc0));
-  Serial.println("***** LOOP PH FIN ******");
+  #ifdef SondePH
+    PH_Moyen_Input = measurings0/samples;
+    PHSend= ph(PH_Moyen_Input, calc_PH_ACID,calc_PH_BASIC,calc_CONV_ACID,calc_CONV_BASIC );
 
-  #ifdef RF433
+    Serial.println();
+    Serial.println("***** LOOP PH ******");
+    Serial.println("Start Oregon PH");
+    Serial.printf("Calcul PH: %f\n",PHSend);
+    Serial.printf("PH moyenne Input: %f\n",PH_Moyen_Input);
+    Serial.printf("Voltage Direct: %f\n",ads.computeVolts(adc0));
+    Serial.println("***** LOOP PH FIN ******");
+
+    #ifdef RF433
     /*Envoie des valeurs. en RF433*/
     oregon_send(0xCC,PHSend);
+    #endif
+
   #endif
+
+  #ifdef SondePression
+    Pression_Moyen_Input = measurings2/samples;
+    //PressionCalc = Pression_Moyen_Input * 2.66667 - 1; //calc Tension
+    PressionCalc = Pression_Moyen_Input * 0.00063302 -1.53316675; //Calc conv
+    PressionSend= PressionCalc;
+
+    Serial.println();
+    Serial.println("***** LOOP Pression ******");
+    Serial.println("Start Pression");
+    /*Serial.printf("Calcul pression: %f\n",PressionSend);*/
+    Serial.printf("Pression moyenne Input: %f\n",PressionCalc);
+    Serial.printf("Voltage Direct: %f\n",ads.computeVolts(adc2));
+    Serial.printf("Measuring2: %f\n",measurings2);
+    Serial.printf("Conv: %i\n",adc2);
+    Serial.println("***** LOOP pression FIN ******");
+
+    #ifdef RF433
+    /*Envoie des valeurs. en RF433*/
+    oregon_send(0xCB,PressionSend);
+    #endif
+
+  #endif
+
 #endif
 
 #ifdef SondeTEMP    
@@ -973,9 +996,14 @@ void loop(){
   #endif
   
   #ifdef SondePH
-    
+    #ifdef SondePression
+      display.setTextSize(0);
+      display.setTextColor(WHITE);
+    #endif
+   
     if ( ((calc_CONV_ACID + 500) < adc0) || ((calc_CONV_BASIC - 500)> adc0)){
        display.printf("Conv Value\nOut: %i",adc0); 
+       display.println();
       }
     else{
       display.print("PH: ");
@@ -983,6 +1011,14 @@ void loop(){
       display.printf("Conv:%i",adc0); 
     }
   #endif
+
+  #ifdef SondePression
+    display.print("Pression: ");
+    display.println(PressionSend);
+    display.printf("Conv:%i",adc2);
+    //display.printf("Tension:%f",ads.computeVolts(adc2));
+  #endif
+  
  display.display();
 #endif
    
