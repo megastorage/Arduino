@@ -30,7 +30,7 @@
 #include <Arduino.h>
 
 /* Definition de la carte et options*/
-#define SondePH
+//#define SondePH
 #define SondePression
 #define SondeTEMP
 #define RF433
@@ -39,6 +39,9 @@
 #ifdef SondePH
   #define WIFI_ON // Activation du wifi
   #define ADS1X15
+  #define Calc_Propor_On
+  #define SPIFF_ON
+
 
   /*RAM Lecture / ecriture*/
   int calc_CONV_ACID;
@@ -49,6 +52,7 @@
 
   #ifdef ESP8266
      #include <EEPROM.h> 
+     #include <LittleFS.h>
      /* Gestion des Fichiers*/
      # include <FS.h>
      /* Adresse dans l'EEPROM*/
@@ -76,10 +80,52 @@
 #ifdef SondePression
   #ifndef SondePH
     #define ADS1X15
+    #define WIFI_ON // Activation du wifi
+    #define Calc_Propor_On //Activation fonction Proportionnel
+    #define SPIFF_ON
+
+    #include <LittleFS.h>
+    #include <EEPROM.h> 
+     /* Gestion des Fichiers*/
+     # include <FS.h>
+
   #endif
+
  float Pression_Moyen_Input=0.0;
  float PressionCalc, PressionSend;
- 
+ /*RAM Lecture / ecriture*/
+  int calc_CONV_PressionB;
+  int calc_Pression_Basse;
+  int calc_Pression_Haute;
+  int calc_CONV_PressionH;
+
+  #ifdef ESP8266
+     
+     /* Adresse dans l'EEPROM*/
+      int addr_Pression_Bas = 20;         // Pression bas index
+      int addr_Conv_Press_Bas = 25;         // Conv_bas index
+      int addr_Pression_Haut = 30;         // PPression Haut index
+      int addr_Conv_Press_Haut = 35;         // Conv_Haut index
+   #else
+    #ifndef SondePH
+   
+     /* ESP32 Dependencies */
+     /* Gestion des Fichiers*/ 
+     #include <SPIFFS.h>
+     
+     /* EEPROM*/
+     #include <Preferences.h> 
+     Preferences Base_Value;
+     
+     #endif
+     
+  #endif
+
+   /* Variables associées ADS1115 PH*/
+  float valeurPressionB_Base,valeurPressionH_Base;
+  //float PressionSend = 0.0;
+  float LastPression =0.0;
+  //float Pression_Moyen_Input=0.0;  
 #endif
 
 #ifdef ADS1X15
@@ -162,8 +208,9 @@
   
   
   // Tableaux contenant l'adresse de chaque sonde OneWire | arrays to hold device addresses
-  const byte SENSOR_ADDRESS_1[] = { 0x28,  0xFF,  0xCA,  0xD9,  0x2,  0x17,  0x3,  0x6A};
-
+  //const byte SENSOR_ADDRESS_1[] = { 0x28,  0xFF,  0xCA,  0xD9,  0x2,  0x17,  0x3,  0x6A};
+  const byte SENSOR_ADDRESS_1[] = { 0x28,  0xFF,  0x64,  0x1E,  0xD,  0x99,  0xC8,  0x2};
+  
   /* Def des variables*/ 
   float TempSend = 0.0;
   float LastTemp = 0.0;
@@ -518,47 +565,57 @@
   }
 #endif
 
-#ifdef SondePH
-  /*************    Calcul du PH    *************/
-  float ph(float Conv_Input,float PH_Base, float PH_ACID, float Conv_Basic, float Conv_Acid) {
-     float coef_a, coef_b, Result_PH;
+#ifdef Calc_Propor_On
+
+  /*************    Calcul du PH/ Pression Proportionnel    *************/
+  float Cal_Propor(float Conv_Input,float Ref_Low, float Ref_Hight, float Conv_Low, float Conv_Hight) {
+     float coef_a, coef_b, Result_Calc;
   
       /* Calcul coef A*/
-      coef_a = ((PH_Base-PH_ACID)/(Conv_Basic-Conv_Acid));
+      coef_a = ((Ref_Low-Ref_Hight)/(Conv_Low-Conv_Hight));
   
       /* Calcul B*/
-      coef_b= PH_Base - (Conv_Basic * coef_a);
+      coef_b= Ref_Low - (Conv_Low * coef_a);
   
       /* Calcul Final*/
-      Result_PH = ((Conv_Input * coef_a) + coef_b);
+      Result_Calc = ((Conv_Input * coef_a) + coef_b);
       Serial.println("");
       Serial.println("---------------------------");
-      Serial.println("Calcul PH values");
+      Serial.println("Calcul Propo values");
+      Serial.printf("Ref value: %f\n",Conv_Input);
+      Serial.printf("Ref low: %f\n",Ref_Low);
+      Serial.printf("conv low: %f\n",Conv_Low);
+      Serial.printf("ref High: %f\n",Ref_Hight);
+      Serial.printf("conv High: %f\n",Conv_Hight);
       Serial.printf("Coef A: %f\n",coef_a);
       Serial.printf("Coef B: %f\n",coef_b);
       Serial.printf("Conv Input: %f\n",Conv_Input);
-      Serial.printf("PH result: %f\n",Result_PH/100);
+      Serial.printf("Propo result: %f\n",Result_Calc/100);
       Serial.printf("Coef A * Input= %f\n",Conv_Input * coef_a);
       Serial.println("---------------------------");
       Serial.println("");
-      Result_PH = Result_PH/100;
+      Result_Calc = Result_Calc/100;
   
-      if (Result_PH > 14.0 ){
-        Result_PH =14.0;
+      if (Result_Calc > 14.0 ){
+        Result_Calc =14.0;
       }
-      else if (Result_PH < 0.0){
-         Result_PH =0.0;
+      else if (Result_Calc < 0.0){
+         Result_Calc =0.0;
       }
      
-      return Result_PH;
+      return Result_Calc;
   }
-  
+  #endif
+
+
+#ifdef SondePH
+
   /********* Etalonnage PH base 4 *********/
   void Base_PH_4(){
      Serial.print("Before to send ON PH4: ");
      
      int PHSend_EEPROM = int (valeurPH4_Base * 100);
-     Serial.printf("PH_Send to Eeprom: %Pi\n",PHSend_EEPROM);
+     Serial.printf("PH_Send to Eeprom: %i\n",PHSend_EEPROM);
      
      #ifdef ESP8266
         Update_EEPROM(addr_PH_ACID, PHSend_EEPROM);
@@ -566,9 +623,11 @@
 
         /***** DEBUG *****/
         Serial.println("");
+        read_EEPROM(addr_PH_ACID,calc_PH_ACID);
+        read_EEPROM(addr_Conv_ACID,calc_CONV_ACID);
         Serial.printf("PH ACID: %i\n",calc_PH_ACID);
         Serial.printf("Cnv ACID: %i\n",calc_CONV_ACID);
-        read_EEPROM(addr_PH_ACID,calc_PH_ACID);
+        
 
      #else
         Base_Value.putInt("PH_Acid",PHSend_EEPROM);
@@ -598,9 +657,11 @@
         /***** DEBUG *****/
         Serial.println("");
         Serial.printf("Send for print: %i\n",adc0);  
+        read_EEPROM(addr_Conv_BASIC,calc_CONV_BASIC);
+        read_EEPROM(addr_PH_BASIC,calc_PH_BASIC);
         Serial.printf("PH BASIC: %i\n",calc_PH_BASIC);
         Serial.printf("Conv BASIC: %i\n",calc_CONV_BASIC);
-        read_EEPROM(addr_Conv_BASIC,calc_CONV_BASIC);
+        
      #else
         Base_Value.putInt("PH_Basic",PHSend_EEPROM);
         Base_Value.putInt("Conv_Basic",adc0);
@@ -616,31 +677,16 @@
      #endif
     
   }
-  
-    #ifdef ESP8266
+    
+#endif
+
+#ifdef SPIFF_ON
+  #ifdef ESP8266
       /********* Lecture EEprom *********/
       void read_EEPROM(int addresse, int &variable){
-        Serial.println("Check writing");
+        Serial.println("Check Reading");
         EEPROM.get(addresse,variable);
         Serial.println(variable);
-      }
-      
-      /********* Update EEprom *********/
-      void Update_EEPROM(int addresse, int variable){
-        Serial.println("Update EEPROM");
-        Serial.println(addresse);
-        Serial.println(variable);
-      
-        Clear_EEPROM(addresse);
-        EEPROM.put(addresse, variable);
-      
-        Serial.println("");
-        
-        if (EEPROM.commit()) {
-          Serial.println("Data successfully committed");
-        } else {
-          Serial.println("ERROR! Data commit failed");
-        }
       }
 
       /********* Effacement EEprom *********/
@@ -654,6 +700,27 @@
         Serial.println(addresse);
         Serial.println("Clear EEPROM DONE");
       }
+      
+      /********* Update EEprom *********/
+      void Update_EEPROM(int addresse, int variable){
+        int val_conv_send = variable;
+        Serial.println("Update EEPROM");
+        Serial.println(addresse);
+        Serial.println(val_conv_send);
+      
+        Clear_EEPROM(addresse);
+        EEPROM.put(addresse, val_conv_send);
+        Serial.println("Val send: ");
+        Serial.println(val_conv_send);
+        Serial.println("");
+        
+        if (EEPROM.commit()) {
+          Serial.println("Data successfully committed");
+        } else {
+          Serial.println("ERROR! Data commit failed");
+        }
+      }
+
     #else
 
     #endif
@@ -675,9 +742,76 @@
        
       }
   #endif
+  #endif
+
+#ifdef SondePression
+//
+ /********* Etalonnage Pression Basse *********/
+  void Pression_Basse(){
+     Serial.print("Before to send ON PressionB: ");
+     
+     int PressionSend_EEPROM = int (valeurPressionB_Base * 100);
+     Serial.printf("Pression_Send to Eeprom: %i\n",PressionSend_EEPROM);
+     
+     #ifdef ESP8266
+        Update_EEPROM(addr_Pression_Bas, PressionSend_EEPROM);
+        Update_EEPROM(addr_Conv_Press_Bas, adc2);
+
+        /***** DEBUG *****/
+        Serial.println("");
+        read_EEPROM(addr_Pression_Bas,calc_Pression_Basse);
+        read_EEPROM(addr_Conv_Press_Bas,calc_CONV_PressionB);
+        Serial.printf("Pression Basse: %i\n",calc_Pression_Basse);
+        Serial.printf("Cnv Pression Basse: %i\n",calc_CONV_PressionB);
+       
+
+     #else
+        Base_Value.putInt("Pression base",PressionSend_EEPROM);
+        Base_Value.putInt("Conv_Acid",adc2);
+         /***** DEBUG *****/
+         calc_Pression_Basse = Base_Value.getInt("Pression_Basse",0);
+         calc_CONV_PressionB = Base_Value.getInt("Conv_PressionB",0);
+    
+        Serial.printf("Pression Basse: %i\n",calc_Pression_Basse);
+        Serial.printf("Cnv Pression Basse: %i\n",calc_CONV_PressionB);
+            
+     #endif
+     
+  }
+  
+  /********* Etalonnage Pression Haute *********/
+  void Pression_Haute(){
+   
+    Serial.print("Before to send on PH10: ");
+     int PressionSend_EEPROM = int (valeurPressionH_Base * 100);
+     Serial.println(PressionSend_EEPROM);
+     
+     #ifdef ESP8266
+        Update_EEPROM(addr_Pression_Haut, PressionSend_EEPROM);
+        Update_EEPROM(addr_Conv_Press_Haut, adc2);
+        
+        /***** DEBUG *****/
+        Serial.println("");
+        Serial.printf("Send for print: %i\n",adc2);  
+        Serial.printf("Pression Haute: %i\n",calc_Pression_Haute);
+        Serial.printf("Conv Pression Haute: %i\n",calc_CONV_PressionH);
+        read_EEPROM(addr_Conv_Press_Haut,calc_CONV_PressionH);
+     #else
+        Base_Value.putInt("Pression_Haute",PressionSend_EEPROM);
+        Base_Value.putInt("Conv_Pression_Haute",adc2);
+         /***** DEBUG *****/
+        Serial.println("");
+        Serial.printf("Send for print: %i\n",adc2);   
+
+        calc_Pression_Haute = Base_Value.getInt("Pression_Haute",0);
+        calc_CONV_PressionH = Base_Value.getInt("Conv_PressionH",0);
+        Serial.printf("Pression Haute: %i\n",calc_Pression_Haute);
+        Serial.printf("Conv Pression Haute: %i\n",calc_CONV_PressionH);
+
+     #endif
+
+  }
 #endif
-
-
 
 void setup()
 {
@@ -688,7 +822,7 @@ void setup()
 
 #ifdef WIFI_ON
     //----------------------------------------------------SPIFFS
-    if(!SPIFFS.begin())
+    if(!LittleFS.begin())
     {
       Serial.println("Erreur SPIFFS...");
       return;
@@ -698,7 +832,7 @@ void setup()
   Serial.println("Start Read File system");
    
     #ifdef ESP8266
-     Dir dir = SPIFFS.openDir ("");
+     Dir dir = LittleFS.openDir ("");
     while (dir.next ()) {
       Serial.println (dir.fileName ());
       Serial.println (dir.fileSize ());
@@ -714,33 +848,51 @@ void setup()
       WiFi.mode(WIFI_AP);
       WiFi.softAP("ESP8266_PH", "ESP8266_Etallonage");
   
-  
+    #ifdef SondePh
     //----------------------------------------------------SERVER
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
     {
-      request->send(SPIFFS, "/index.html", "text/html");
+      request->send(LittleFS, "/index.html", "text/html");
     });
-  
+    #endif
+
+    #ifdef SondePression
+    //----------------------------------------------------SERVER
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+    {
+      request->send(LittleFS, "/Pression.html", "text/html");
+    });
+    #endif
+
     server.on("/w3.css", HTTP_GET, [](AsyncWebServerRequest *request)
     {
-      request->send(SPIFFS, "/w3.css", "text/css");
+      request->send(LittleFS, "/w3.css", "text/css");
     });
   
     server.on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request)
     {
-      request->send(SPIFFS, "/script.js", "text/javascript");
+      request->send(LittleFS, "/script.js", "text/javascript");
     });
   
     server.on("/jquery-3.6.0.min.js", HTTP_GET, [](AsyncWebServerRequest *request)
     {
-      request->send(SPIFFS, "/jquery-3.6.0.min.js", "text/javascript");
+      request->send(LittleFS, "/jquery-3.6.0.min.js", "text/javascript");
     });
   
     server.on("/lireCONV", HTTP_GET, [](AsyncWebServerRequest *request)
     {
-      int val = adc0;
-      String PH_CONV_Send = String(val);
-      request->send(200, "text/plain", PH_CONV_Send);
+      #ifdef SondePH
+        int val = adc0;
+        String PH_CONV_Send = String(val);
+        request->send(200, "text/plain", PH_CONV_Send);
+      #endif
+
+      #ifdef SondePression
+        int val2 = adc2;
+        String Pression_CONV_Send = String(val2);
+        request->send(200, "text/plain", Pression_CONV_Send);
+      #endif
+
     });
   
     server.on("/lireTEMP", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -754,7 +906,8 @@ void setup()
       
       request->send(200, "text/plain", Temp_Send_HTML);
     });
-  
+
+  #ifdef SondePH
     server.on("/lirePH", HTTP_GET, [](AsyncWebServerRequest *request)
     {
       float val = PHSend;
@@ -782,7 +935,39 @@ void setup()
          Base_PH_10();
         request->send(204);
     });
+  #endif
+
+  #ifdef SondePression
+    server.on("/lirePression", HTTP_GET, [](AsyncWebServerRequest *request)
+    {
+      float val = PressionSend;
+      String Pression_Send_HTML = String(val);
+      request->send(200, "text/plain", Pression_Send_HTML);
+    });
+  
+    server.on("/SendPressionBValue", HTTP_POST, [](AsyncWebServerRequest *request)
+      {
+        String message;
+        message = request->getParam("valeurPressionB_Base", true)->value();
+        valeurPressionB_Base = message.toFloat();
+        Serial.print("Send Pression Low value :");
+        Serial.println(valeurPressionB_Base);
+        Pression_Basse();
+        request->send(204);
+      });
     
+      server.on("/SendPressionHValue", HTTP_POST, [](AsyncWebServerRequest *request)
+      {
+        String message;
+        message = request->getParam("valeurPressionH_Base", true)->value();
+        valeurPressionH_Base = message.toFloat();
+         Serial.printf("Send PH10 value : %f\n",valeurPressionH_Base);
+         Pression_Haute();
+        request->send(204);
+    });
+  #endif
+
+
        //Send OTA events to the browser
      
     server.begin();
@@ -795,24 +980,50 @@ void setup()
  
   #ifdef ESP8266
     
+    #ifdef SondePH
     /* Lecture EEPROM*/
-    EEPROM.begin(20);
+    EEPROM.begin(40);
     read_EEPROM(addr_PH_ACID, calc_PH_ACID);
     read_EEPROM(addr_Conv_ACID,calc_CONV_ACID);
     read_EEPROM(addr_PH_BASIC,calc_PH_BASIC);
     read_EEPROM(addr_Conv_BASIC,calc_CONV_BASIC);
-  #else
+    #endif
     
-    Base_Value.begin("Base_Value", false); 
-    calc_PH_ACID = Base_Value.getInt("PH_Acid",0);
-    calc_CONV_ACID = Base_Value.getInt("Conv_Acid",0);
-    calc_PH_BASIC = Base_Value.getInt("PH_Basic",0);
-    calc_CONV_BASIC = Base_Value.getInt("Conv_Basic",0);
+    #ifdef SondePression
+    /* Lecture EEPROM*/
+    EEPROM.begin(40);
+    read_EEPROM(addr_Pression_Bas, calc_Pression_Basse);
+    read_EEPROM(addr_Conv_Press_Bas,calc_CONV_PressionB);
+    read_EEPROM(addr_Pression_Haut,calc_Pression_Haute);
+    read_EEPROM(addr_Conv_Press_Haut,calc_CONV_PressionH);
+    #endif
 
-    Serial.printf("PH ACID: %i\n",calc_PH_ACID);
-    Serial.printf("Cnv ACID: %i\n",calc_CONV_ACID);
-    Serial.printf("PH BASIC: %i\n",calc_PH_BASIC);
-    Serial.printf("Conv BASIC: %i\n",calc_CONV_BASIC);
+  #else
+    #ifdef SondePH 
+      Base_Value.begin("Base_Value", false); 
+      calc_PH_ACID = Base_Value.getInt("PH_Acid",0);
+      calc_CONV_ACID = Base_Value.getInt("Conv_Acid",0);
+      calc_PH_BASIC = Base_Value.getInt("PH_Basic",0);
+      calc_CONV_BASIC = Base_Value.getInt("Conv_Basic",0);
+
+      Serial.printf("PH ACID: %i\n",calc_PH_ACID);
+      Serial.printf("Cnv ACID: %i\n",calc_CONV_ACID);
+      Serial.printf("PH BASIC: %i\n",calc_PH_BASIC);
+      Serial.printf("Conv BASIC: %i\n",calc_CONV_BASIC);
+    #endif
+
+    #ifdef SondePression
+      Base_Value.begin("Base_Value", false); 
+      calc_Pression_Basse = Base_Value.getInt("Pression_Basse",0);
+      calc_CONV_PressionB = Base_Value.getInt("Conv_PressionB",0);
+      calc_Pression_Haute = Base_Value.getInt("Pression_Haute",0);
+      calc_CONV_PressionH = Base_Value.getInt("Conv_PressionH",0);
+
+      Serial.printf("Pression Basse: %i\n",calc_Pression_Basse);
+      Serial.printf("Cnv Pression Basse: %i\n",calc_CONV_PressionB);
+      Serial.printf("Pression Haute: %i\n",calc_Pression_Haute);
+      Serial.printf("Conv Pression Haute: %i\n",calc_CONV_PressionH);
+    #endif
   #endif
 #endif
 
@@ -914,7 +1125,7 @@ void loop(){
 
   #ifdef SondePH
     PH_Moyen_Input = measurings0/samples;
-    PHSend= ph(PH_Moyen_Input, calc_PH_ACID,calc_PH_BASIC,calc_CONV_ACID,calc_CONV_BASIC );
+    PHSend= Cal_Propor(PH_Moyen_Input, calc_PH_ACID,calc_PH_BASIC,calc_CONV_ACID,calc_CONV_BASIC );
 
     Serial.println();
     Serial.println("***** LOOP PH ******");
@@ -934,8 +1145,10 @@ void loop(){
   #ifdef SondePression
     Pression_Moyen_Input = measurings2/samples;
     //PressionCalc = Pression_Moyen_Input * 2.66667 - 1; //calc Tension
-    PressionCalc = Pression_Moyen_Input * 0.00063302 -1.53316675; //Calc conv
-    PressionSend= PressionCalc;
+    // = Pression_Moyen_Input * 0.00063302 -1.53316675; //Calc conv
+    //PressionSend= PressionCalc;
+
+    PressionSend=Cal_Propor(Pression_Moyen_Input, calc_Pression_Basse,calc_Pression_Haute,calc_CONV_PressionB,calc_CONV_PressionH );
 
     Serial.println();
     Serial.println("***** LOOP Pression ******");
@@ -1020,6 +1233,5 @@ void loop(){
   #endif
   
  display.display();
-#endif
-   
+#endif 
 }
