@@ -26,6 +26,34 @@ $(document).ready(function(){
     });
 });
 
+$(document).ready(function(){
+    $("#PressionLowButton").click(function(){
+        var valeur = $("#PressionB_Base_Value").val();
+        if ((valeur > 1.0) || (valeur <0.0)) {
+            alert('Valeur Pression Basse Non Correct 0 < Pression Basse > 1');
+        }
+        else{
+        $.post("SendPressionBValue",{
+            valeurPressionB_Base: valeur
+        });
+        }
+    });
+});
+
+$(document).ready(function(){
+    $("#PressionHightButton").click(function(){
+        var valeur = $("#PressionH_Base_Value").val();
+        if ((valeur < 2.0) || (valeur >10.0)){
+            alert('Valeur Pression Haute Non Correct 2.0 < Pression Haute > 10.0');
+        }
+        else{
+            $.post("SendPressionHValue",{
+                valeurPressionH_Base: valeur
+            });
+        }
+    });
+});
+
 setInterval(function getDataCONV()
 {
     var xhttp = new XMLHttpRequest();
@@ -34,7 +62,7 @@ setInterval(function getDataCONV()
     {
         if(this.readyState == 4 && this.status == 200)
         {
-            document.getElementById("valeurCONV").innerHTML = this.responseText;
+            document.getElementById("valeurCONV_Pression").innerHTML = this.responseText;
         }
     };
 
@@ -58,7 +86,7 @@ setInterval(function getDataTEMP()
     xhttp.send();
 }, 2000);
 
-setInterval(function getDataPH()
+setInterval(function getDataPression()
 {
     var xhttp = new XMLHttpRequest();
 
@@ -66,10 +94,10 @@ setInterval(function getDataPH()
     {
         if(this.readyState == 4 && this.status == 200)
         {
-            document.getElementById("valeurPH").innerHTML = this.responseText;
+            document.getElementById("valeurPression").innerHTML = this.responseText;
         }
     };
 
-    xhttp.open("GET", "lirePH", true);
+    xhttp.open("GET", "lirePression", true);
     xhttp.send();
 }, 2000);
