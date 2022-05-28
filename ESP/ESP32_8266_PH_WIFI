@@ -7,6 +7,7 @@
   * tools:
   * https://github.com/me-no-dev/arduino-esp32fs-plugin/releases/
   * https://github.com/esp8266/arduino-esp8266fs-plugin/releases
+  * 
   * RF433 ESP8266 Pin D8 ESP32 Pin D15
   * 
   * Onwire ESP8266 Pin D2   ESP32 Pin D4
@@ -24,6 +25,10 @@
   * ESP32
   * https://github.com/me-no-dev/AsyncTCP
   * https://github.com/pellepl/spiffs
+  * 
+  * BP WIFI
+  *      ESP8266                 ESP32
+  *      PIN=D1                PIN=D5   
   */
  
  
@@ -143,11 +148,15 @@
 
 #ifdef WIFI_ON
    
+   int wifi_enable = 0;
+
+   #define Pin_Inter_Wifi 5    //Pour inter activation wifi
+
   #ifdef ESP8266
     /* ESP8266 Dependencies */
     #include <ESP8266WiFi.h>
-    #include <ESPAsyncWebServer.h>
     #include <ESPAsyncTCP.h>
+    #include <ESPAsyncWebServer.h>
      
   #else
    /* ESP32 Dependencies */
@@ -729,20 +738,18 @@
   void listDir(char * dir){
  
         File root = SPIFFS.open(dir);
-       
         File file = root.openNextFile();
        
         while(file){
        
             Serial.print("FILE: ");
             Serial.println(file.name());
-       
             file = root.openNextFile();
         }
        
       }
   #endif
-  #endif
+#endif
 
 #ifdef SondePression
 //
@@ -796,6 +803,7 @@
         Serial.printf("Pression Haute: %i\n",calc_Pression_Haute);
         Serial.printf("Conv Pression Haute: %i\n",calc_CONV_PressionH);
         read_EEPROM(addr_Conv_Press_Haut,calc_CONV_PressionH);
+        read_EEPROM(addr_Pression_Haut,calc_Pression_Haute);
      #else
         Base_Value.putInt("Pression_Haute",PressionSend_EEPROM);
         Base_Value.putInt("Conv_Pression_Haute",adc2);
@@ -813,6 +821,16 @@
   }
 #endif
 
+void Wifi_start()
+{
+    
+    
+    //----------------------------------------------------WIFI
+     Serial.println("Wifi on");
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP("ESP8266_PH", "ESP8266_Etallonage");
+}
+
 void setup()
 {
   
@@ -821,15 +839,18 @@ void setup()
   Serial.println("\n");
 
 #ifdef WIFI_ON
-    //----------------------------------------------------SPIFFS
+  pinMode(Pin_Inter_Wifi, INPUT_PULLUP);
+
+  //----------------------------------------------------SPIFFS
     if(!LittleFS.begin())
-    {
-      Serial.println("Erreur SPIFFS...");
-      return;
-    }
-  delay(1000);
-  Serial.println("");
-  Serial.println("Start Read File system");
+      {
+        Serial.println("Erreur SPIFFS...");
+        return;
+      }
+      
+    delay(1000);
+    Serial.println("");
+    Serial.println("Start Read File system");
    
     #ifdef ESP8266
      Dir dir = LittleFS.openDir ("");
@@ -842,13 +863,8 @@ void setup()
       Serial.println("\n----DIR: /");
         listDir("/");
     #endif
-    
-    //----------------------------------------------------WIFI
-     Serial.println("Wifi on");
-      WiFi.mode(WIFI_AP);
-      WiFi.softAP("ESP8266_PH", "ESP8266_Etallonage");
-  
-    #ifdef SondePh
+
+     #ifdef SondePh
     //----------------------------------------------------SERVER
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
     {
@@ -1025,6 +1041,7 @@ void setup()
       Serial.printf("Conv Pression Haute: %i\n",calc_CONV_PressionH);
     #endif
   #endif
+
 #endif
 
 #ifdef I2C_On
@@ -1095,11 +1112,40 @@ void setup()
 #endif
 }
 
+/*****************************   LOOP  *************************/
+
 void loop(){
-    
+
+Serial.println();
+Serial.print("********* LOOP START *********");
+
+/**** Activation du wifi si BP ON     ****/
+#ifdef WIFI_ON
+  if (digitalRead(Pin_Inter_Wifi)== LOW){
+    if (wifi_enable == 0){
+      Wifi_start();
+      wifi_enable = 1;
+    }
+    Serial.println();
+    Serial.print("Connected, IP address: ");
+    Serial.println(WiFi.localIP());
+  }
+
+  else
+  {
+    if(wifi_enable = 1){
+      Serial.println();
+      Serial.print("Wifi OFF");
+      WiFi.mode(WIFI_OFF);
+      wifi_enable = 0; 
+    }
+  }
+#endif
+
+
 #ifdef ADS1X15  // Calcul des valeurs
-   measurings2=0;
    measurings0=0;
+   measurings2=0;
 
     for (int i = 0; i < samples; i++)
     {
